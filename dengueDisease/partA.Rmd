@@ -1,0 +1,314 @@
+```{r loadData}
+# Reference: MBAN 2020 BABS 508, Martha Essak
+dengueData <- read.csv(file.choose(), header=TRUE)
+str(dengueData)
+```
+
+```{r Q1}
+p <- nrow(subset(dengueData, dengueData$disease.status == 1)) / nrow(dengueData); p
+```
+```{r Q2}
+v <- var(dengueData$disease.status);v
+```
+
+```{r Q3}
+sigma.sq=p*(1-p); sigma.sq
+
+```
+
+
+```{r Q5}
+prop <- function(x){
+    sum(x)/length(x)
+}
+tapply(dengueData$disease.status, as.factor(dengueData$socioeconomic.status), prop)
+tapply(dengueData$disease.status, as.factor(dengueData$sector), prop)
+```
+
+```{r Q9}
+# png("Q9.png")
+plot(jitter(disease.status, f= 0.4)~ age, data = dengueData, main = "Disease Status vs. Age", xlab = "Age (Years)", ylab = "Disease Status (have disease = 1)")
+lines(lowess(dengueData$disease.status ~ dengueData$age), col="red")
+# dev.off()
+```
+
+```{r Q10}
+z.null <- glm(disease.status ~ 1, data=dengueData, family="binomial"(link="logit"))
+summary(z.null)
+exp(-0.8914) / (1+exp(-0.8914))
+```
+
+```{r Q11}
+z.age <- glm(disease.status~ age, data=dengueData, family="binomial"(link="logit"))
+summary(z.age)
+```
+
+```{r Q12}
+anova(z.age)
+224.32/194
+```
+
+```{r Q14}
+anova(z.null, z.age, test="Chi")
+qchisq(0.95, 1)
+```
+
+```{r Q16}
+agenew <- seq(min(dengueData$age), max(dengueData$age), length.out = 100)
+ynew <- predict(z.age, data.frame(age = agenew), type="response")
+
+preds <- predict(z.age, newdata = data.frame(age = agenew),se.fit = TRUE)
+critval <- qnorm(0.975) # alpha = 0.05
+
+zupper <- preds$fit + critval * preds$se.fit
+zlower <- preds$fit - critval * preds$se.fit
+
+yupper <- exp(zupper)/(1 + exp(zupper)) # transform back to original scale in probability
+ylower <- exp(zlower)/(1 + exp(zlower))
+
+# png("Q16.png")
+plot(jitter(disease.status, f=0.4) ~ age, data=dengueData, main="Dengue Disease Status vs. Age", xlab="Age (Years)",ylab="Disease Status (have disease = 1)" )
+lines(agenew, ynew, lty=1, col = "blue")
+lines(yupper ~ agenew, lty=2, col = "blue")
+lines(ylower ~ agenew, lty=2, col = "blue")
+dengue.mean <- mean(dengueData$disease.status)
+abline(dengue.mean,0,col="black", lty=2)
+# dev.off()
+```
+
+```{r Q17}
+
+table <- summary(z.age)$coefficients
+age <- (log(dengue.mean/(1-dengue.mean)) - table[1,1])/table[2,1];age
+```
+
+```{r Q18}
+df <- data.frame(matrix(ncol = 9, nrow = 51))
+colnames(df) <- c("true.positive", "true.negative", "false.positive", "false.negative", "correct.percent", "sensitivity", "specificity", "false.pos.rate", "false.neg.rate")
+#  df
+
+
+prob.level <- seq(0, 1, length.out=51) # create a vector with different possible probabilities
+# prob.level
+class.table.data <- cbind(prob.level, df) # combine your vector of probabilities and your empty dataframe
+# class.table.data # Your dataframe has one row for each probability cut-off
+
+# fill empty cells in your dataframe with 0
+class.table.data$true.positive <- rep(c(0), c(51))
+class.table.data$true.negative <- rep(c(0), c(51))
+class.table.data$false.positive <- rep(c(0), c(51))
+class.table.data$false.negative <- rep(c(0), c(51))
+# class.table.data
+
+
+
+# This loop will try out the different probability cut-off values and fill in how many true positive/negatives and false positive/negatives you have based on your data.
+for (i in 1:nrow(dengueData)+1) {
+class.table <- table(dengueData$disease.status, fitted(z.age) > class.table.data$prob.level[i])
+
+col.true.num <- grep("TRUE", colnames(class.table))
+col.false.num <- grep("FALSE", colnames(class.table))
+
+if (length(col.true.num) > 0) {
+      class.table.data$false.positive [i] <- class.table[1, col.true.num]
+      class.table.data$true.positive [i] <- class.table[2, col.true.num] }
+
+if (length(col.false.num) > 0) {
+      class.table.data$true.negative [i] <- class.table[1, col.false.num]
+      class.table.data$false.negative [i] <- class.table[2, col.false.num] }  }
+
+# You will use this information to fill in the rest of your classification table.
+class.table.data$correct.percent <- (class.table.data$true.positive + class.table.data$true.negative)/nrow(dengueData)*100
+class.table.data$sensitivity <- (class.table.data$true.positive)/sum(dengueData$disease.status)*100
+class.table.data$specificity <- (class.table.data$true.negative)/(nrow(dengueData) - sum(dengueData$disease.status))*100
+class.table.data$false.neg.rate <- (class.table.data$false.negative)/sum(dengueData$disease.status)*100
+class.table.data$false.pos.rate <- (class.table.data$false.positive)/(nrow(dengueData) - sum(dengueData$disease.status))*100
+class.table.data<- class.table.data[order(class.table.data$correct.percent,decreasing = TRUE), ] 
+class.table.data
+```
+
+```{r Q22}
+# png("Q22.png")
+plot(jitter(disease.status, f=0.4) ~ age, data=dengueData, pch=1, col = c("blue", "red")[as.factor(dengueData$sector)], xlab="Age (Years) ", ylab = "Disease Status (have disease = 1)", main="Disease Status vs. Age with respect to Sectors")
+
+sector1 <- subset(dengueData, dengueData$sector == "sector 1")
+sector2 <- subset(dengueData, dengueData$sector == "sector 2")
+
+lines(lowess(sector1$disease.status ~ sector1$age), col="blue")
+lines(lowess(sector2$disease.status ~ sector2$age), col="red")
+legend(0,0.9,  legend=c("sector 1", "sector 2"),
+       col=c("blue", "red"), lty=1, cex=0.8)
+# dev.off()
+```
+
+```{r Q23}
+# png("Q23.png")
+plot(jitter(disease.status, f=0.4) ~ age, data=dengueData, pch=1, col = c("blue", "red", "green")[as.factor(dengueData$socioeconomic.status)], xlab="Age (Years)", ylab = "Disease Status (have disease = 1)", main="Disease Status vs. Age with respect to Socioeconomic Status")
+
+low <- subset(dengueData, dengueData$socioeconomic.status == "low")
+middle <- subset(dengueData, dengueData$socioeconomic.status == "middle")
+upper <- subset(dengueData, dengueData$socioeconomic.status == "upper")
+
+lines(lowess(low$disease.status ~ low$age), col="blue")
+lines(lowess(middle$disease.status ~ middle$age), col="red")
+lines(lowess(upper$disease.status ~ upper$age), col="green")
+legend(0,0.9,  legend=c("low", "middle", "upper"),
+       col=c("blue", "red", "green"), lty=1, cex=0.8)
+# dev.off()
+```
+
+```{r Q24}
+z.interact <- glm(disease.status ~ age*socioeconomic.status + age*sector, data = dengueData,family="binomial"(link="logit"))
+anova(z.null, z.interact, test="Chi")
+```
+
+```{r Q25}
+qchisq(0.95, 7)
+```
+
+```{r Q27}
+z.no.age <- glm(disease.status ~ socioeconomic.status + sector, data=dengueData, family="binomial"(link="logit"))
+anova(z.no.age, z.interact, test="Chi")
+qchisq(0.95, 4)
+```
+
+```{r Q29}
+z.no.sector <- glm(disease.status ~ socioeconomic.status*age, data=dengueData, family="binomial"(link="logit"))
+anova(z.no.sector, z.interact, test="Chi")
+qchisq(0.95, 2)
+```
+
+```{r Q31}
+z.no.socioeconomics <- glm(disease.status ~ sector*age, data=dengueData, family="binomial"(link="logit"))
+anova(z.no.socioeconomics, z.interact, test="Chi")
+qchisq(0.95, 4)
+```
+
+```{r Q33}
+z.no.interact <- glm(disease.status ~ sector + age, data=dengueData, family="binomial"(link="logit"))
+anova(z.no.interact, z.no.socioeconomics, test="Chi")
+qchisq(0.95, 1)
+```
+
+```{r Q36}
+# anova(z.no.interact)
+summary(z.no.interact)
+211.64/193
+```
+
+```{r Q38}
+logLik(z.no.interact)
+-2*(-105.8196) + 2*(1+2)
+```
+
+```{r Q39}
+summary(z.no.interact)
+exp(-2.15966)/(1+exp(-2.15966))
+```
+
+```{r Q40}
+math.scores<- seq(min(dengueData$age), max(dengueData$age), length.out = 100)
+
+xnew.df <- as.data.frame(math.scores)
+
+xnew.df.2 <- rbind(xnew.df, xnew.df)
+
+sectors <- c(rep("sector 1", 100), rep("sector 2", 100))
+
+
+sectors <- as.data.frame(sectors)
+
+
+new.data <- cbind(xnew.df.2, sectors)
+
+names(new.data) <- c("age", "sector")
+
+ynew <- predict(z.no.interact, data.frame(new.data), type="response")
+
+new.data.2 <- cbind(new.data, ynew)
+# new.data.2 
+
+
+
+# Subset the new data into the different colors
+dengueData.col.sector1<- subset(new.data.2, new.data.2$sector == "sector 1")
+dengueData.col.sector2 <- subset(new.data.2, new.data.2$sector == "sector 2")
+
+
+# Plot the data and model fit with color coding
+# png("Q40.png")
+plot(jitter(disease.status,f=0.4) ~ age, data=dengueData, pch=1, col = c("blue", "red")[as.factor(dengueData$sector)], xlab="Age (Years)", ylab = "Disease Status (have disease = 1)", main="Disease Status vs. Age with respect to Sectors")
+lines(dengueData.col.sector1$age, dengueData.col.sector1$ynew, lty=1, col="red")
+lines(dengueData.col.sector2$age, dengueData.col.sector2$ynew, lty=1, col="blue")
+legend(0,0.9,  legend=c("sector 1", "sector 2"),
+       col=c("red", "blue"), lty=1, cex=0.8)
+# dev.off()
+```
+
+
+
+
+```{r Q41}
+df <- data.frame(matrix(ncol = 9, nrow = 51))
+colnames(df) <- c("true.positive", "true.negative", "false.positive", "false.negative", "correct.percent", "sensitivity", "specificity", "false.pos.rate", "false.neg.rate")
+#  df
+
+
+prob.level <- seq(0, 1, length.out=51) # create a vector with different possible probabilities
+# prob.level
+class.table.data <- cbind(prob.level, df) # combine your vector of probabilities and your empty dataframe
+# class.table.data # Your dataframe has one row for each probability cut-off
+
+# fill empty cells in your dataframe with 0
+class.table.data$true.positive <- rep(c(0), c(51))
+class.table.data$true.negative <- rep(c(0), c(51))
+class.table.data$false.positive <- rep(c(0), c(51))
+class.table.data$false.negative <- rep(c(0), c(51))
+# class.table.data
+
+
+
+# This loop will try out the different probability cut-off values and fill in how many true positive/negatives and false positive/negatives you have based on your data.
+for (i in 1:nrow(dengueData)+1) {
+class.table <- table(dengueData$disease.status, fitted(z.no.interact) > class.table.data$prob.level[i])
+
+col.true.num <- grep("TRUE", colnames(class.table))
+col.false.num <- grep("FALSE", colnames(class.table))
+
+if (length(col.true.num) > 0) {
+      class.table.data$false.positive [i] <- class.table[1, col.true.num]
+      class.table.data$true.positive [i] <- class.table[2, col.true.num] }
+
+if (length(col.false.num) > 0) {
+      class.table.data$true.negative [i] <- class.table[1, col.false.num]
+      class.table.data$false.negative [i] <- class.table[2, col.false.num] }  }
+
+# You will use this information to fill in the rest of your classification table.
+class.table.data$correct.percent <- (class.table.data$true.positive + class.table.data$true.negative)/nrow(dengueData)*100
+class.table.data$sensitivity <- (class.table.data$true.positive)/sum(dengueData$disease.status)*100
+class.table.data$specificity <- (class.table.data$true.negative)/(nrow(dengueData) - sum(dengueData$disease.status))*100
+class.table.data$false.neg.rate <- (class.table.data$false.negative)/sum(dengueData$disease.status)*100
+class.table.data$false.pos.rate <- (class.table.data$false.positive)/(nrow(dengueData) - sum(dengueData$disease.status))*100
+# class.table.data<- class.table.data[order(class.table.data$correct.percent, decreasing = TRUE), ] 
+class.table.data
+```
+
+```{r Q43}
+# png("Q43.png")
+library(zoo)
+plot(sensitivity ~ false.pos.rate, data=class.table.data, xlab="1-Specificity", ylab="Sensitivity", main = "ROC curve")
+lines(sensitivity ~ false.pos.rate, data=class.table.data)
+
+x <- class.table.data$false.pos.rate/100
+y <- class.table.data$sensitivity/100
+id <- order(x)
+# dev.off()
+```
+
+```{r Q44}
+AUC <- sum(diff(x[id])*rollmean(y[id],2)); AUC
+```
+
+
+
+
