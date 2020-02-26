@@ -1,0 +1,170 @@
+```{r loadData}
+# Reference: MBAN 2020 BABS 508, Martha Essak
+heartData <- read.csv(file.choose(), header=TRUE)
+str(heartData)
+```
+
+```{r}
+numOfDrugs <- heartData$drugs
+heartData$drugs.factor <- findInterval(numOfDrugs, c(1,2))
+heartData$drugs.factor <- factor(heartData$drugs.factor, levels = c(0,1,2), labels = c("0", "1", "2+"))
+# heartData$drugs.factor <- as.factor(heartData$drugs)
+heartData$drugs.factor 
+```
+
+```{r Q4}
+m <-mean(heartData$ER.visits); m
+```
+
+```{r Q5}
+var(heartData$ER.visits)
+```
+
+```{r Q6}
+# png("Q6_hist.png")
+hist(heartData$ER.visits, main = "Histogram of ER visits", xlab = "Number of ER visits", ylim = c(0,200), xlim = c(0,11), breaks = 22)
+axis(side=1, at=seq(0,11, 1), labels=seq(0,11,1))
+# dev.off()
+
+# png("Q6_pois.png")
+y = rpois(nrow(heartData), m)
+hist(y,  main = "Histogram of Simulated Possion Distribution",xlab="Mean = 3.305", ylab = "Frequency", breaks = 22, ylim = c(0,200))
+axis(side=1, at=seq(0,11, 1), labels=seq(0,11,1))
+# dev.off()
+```
+
+```{r Q8}
+# tapply(heartData$ER.visits, as.factor(heartData$ER.visits),length)
+# observe data
+ER.obs <- c(44, 141, 163, 128, 108,70,49,26, 18, 15, 8, 10)
+
+expected.freq <- vector("numeric")
+for (i in 1:9) {
+      expected.freq[i] <- exp(-m)*m^(i-1)/factorial(i-1)*nrow(heartData)
+}
+expected.freq[10] <- c(nrow(heartData) - sum(expected.freq))
+expected.freq
+
+obs.freq <- vector("numeric")
+for (i in 1:9) {
+      obs.freq[i] <- ER.obs[i]
+}
+obs.freq[10] <- c(nrow(heartData) - sum(obs.freq))
+obs.freq
+```
+
+```{r Q9}
+freq.table <- as.data.frame(cbind(obs.freq, expected.freq))
+freq.table
+chi.squared.statistic <- sum((freq.table$obs.freq - freq.table$expected.freq)^2/freq.table$expected.freq)
+chi.squared.statistic
+```
+
+```{r Q10}
+qchisq(0.95, df=9)
+```
+
+```{r Q13}
+# png("Q13.png")
+plot(ER.visits~ age, data = heartData, main = "ER visits vs. Age", xlab = "Age (Years)", ylab = "ER visits (Number)")
+lines(lowess(heartData$ER.visits ~ heartData$age), col="red")
+# dev.off()
+```
+
+```{r Q14}
+# png("Q14.png")
+plot(ER.visits~ age, data = heartData, pch=1, col = c("red", "blue")[as.factor(heartData$gender)], xlab="Age (Years) ", ylab = "ER visits (Number)", main="ER visits vs. Age with respect to genders")
+
+female <- subset(heartData, heartData$gender == "female")
+male <- subset(heartData, heartData$gender == "male")
+
+lines(lowess(female$ER.visits ~ female$age), col="red")
+lines(lowess(male$ER.visits ~ male$age), col="blue")
+legend(25,10,  legend=c("female", "male"),
+       col=c("red", "blue"), lty=1, cex=0.8)
+# dev.off()
+```
+
+```{r Q15}
+# png("Q15.png")
+plot(ER.visits~ age, data = heartData, pch=1, col = c("blue", "red", "green")[as.factor(heartData$drugs.factor)], xlab="Age (Years) ", ylab = "ER visits (Number)", main="ER visits vs. Age with respect to drugs usage")
+
+drug0 <- subset(heartData, heartData$drugs.factor == "0")
+drug1 <- subset(heartData, heartData$drugs.factor == "1")
+drug2 <- subset(heartData, heartData$drugs.factor == "2+")
+
+lines(lowess(drug0$ER.visits ~ drug0$age), col="blue")
+lines(lowess(drug1$ER.visits ~ drug1$age), col="red")
+lines(lowess(drug2$ER.visits ~ drug2$age), col="green")
+legend(25,10,  legend=c("0 drugs", "1 drug", "2+ drugs"),
+       col=c("blue", "red", "green"), lty=1, cex=0.8)
+# dev.off()
+```
+
+```{r Q16}
+z.full <- glm(ER.visits ~ age*gender + age*drugs.factor, data = heartData,family="poisson"(link="log"))
+summary(z.full)
+```
+
+```{r Q17}
+z.null <- glm(ER.visits ~ 1, data = heartData,family="poisson"(link="log"))
+anova(z.null, z.full, test="Chi")
+```
+
+```{r Q19}
+z.no.age <- glm(ER.visits ~ gender + drugs.factor, data = heartData,family="poisson"(link="log"))
+anova(z.no.age, z.full, test="Chi")
+```
+
+```{r Q20}
+qchisq(0.95, 4)
+```
+
+```{r Q21}
+z.no.drugs <- glm(ER.visits ~ age*gender, data = heartData,family="poisson"(link="log"))
+anova(z.no.drugs, z.full, test="Chi")
+```
+
+```{r Q22}
+qchisq(0.95, 4)
+```
+
+```{r Q23}
+z.no.gender <- glm(ER.visits ~ age*drugs.factor, data = heartData,family="poisson"(link="log"))
+anova(z.no.gender, z.full, test="Chi")
+```
+
+```{r Q24}
+qchisq(0.95, 2)
+```
+
+
+```{r Q27}
+summary(z.no.age)
+```
+
+```{r Q28}
+1054.8/776
+```
+
+```{r Q30}
+-2*logLik(z.no.age) + 2*(11+3)
+# AIC(z.no.age)
+```
+
+```{r Q32}
+# z.full
+aic.full<- -2*logLik(z.full) + 2*(11+7); aic.full
+# z.null
+aic.null<- -2*logLik(z.null) + 2*(11); aic.null
+# z.no.gender
+aic.no.gender <- -2*logLik(z.no.gender) + 2*(11+5); aic.no.gender
+# z.no.drugs
+aic.no.drugs <- -2*logLik(z.no.drugs) + 2*(11+3); aic.no.drugs
+```
+
+
+
+
+
+
